@@ -2,7 +2,7 @@ import { Game, WORLDS } from './engine.js';
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d');
 const game=new Game(),input={};
-let viewWidth=1200,viewHeight=480,last=0,visualTime=0,sound=false,audioContext,toastUntil=0,previousStatus='',helpWasPlaying=false;
+let viewWidth=1200,viewHeight=480,last=0,visualTime=0,sound=true,audioContext,toastUntil=0,previousStatus='',helpWasPlaying=false;
 const ink='#52604b';
 const nareshSprite=new Image();
 nareshSprite.src=new URL('./assets/naresh-cartoon.png',import.meta.url).href;
@@ -275,7 +275,8 @@ function draw(){
  ctx.globalAlpha=.06;for(let i=0;i<180;i++){const x=(i*137.3)%viewWidth,y=(i*83.7)%viewHeight;path(ctx,[[x,y],[x+2,y+.4]],'#677556',.6);}ctx.globalAlpha=1;
 }
 function resize(){const rect=canvas.getBoundingClientRect();viewWidth=480*rect.width/rect.height;viewHeight=480;const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.round(rect.width*dpr);canvas.height=Math.round(rect.height*dpr);ctx.setTransform(canvas.width/viewWidth,0,0,canvas.height/480,0,0);}
-function tone(type){if(!sound)return;try{audioContext??=new(window.AudioContext||window.webkitAudioContext)();audioContext.resume();const o=audioContext.createOscillator(),g=audioContext.createGain();const now=audioContext.currentTime;const notes={jump:[260,520],shoot:[640,210],star:[880,1320],enemy:[200,65],hurt:[140,65],win:[520,1040],heart:[700,950],checkpoint:[550,830]};const f=notes[type]||[440,660];o.type=type==='shoot'?'triangle':'sine';o.frequency.setValueAtTime(f[0],now);o.frequency.exponentialRampToValueAtTime(f[1],now+.13);g.gain.setValueAtTime(.06,now);g.gain.exponentialRampToValueAtTime(.001,now+.2);o.connect(g);g.connect(audioContext.destination);o.start();o.stop(now+.22);}catch{}}
+function unlockAudio(){if(!sound)return;try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;audioContext??=new Audio();if(audioContext.state==='suspended')audioContext.resume().catch(()=>{});}catch{}}
+function tone(type){if(!sound)return;try{unlockAudio();if(!audioContext)return;const o=audioContext.createOscillator(),g=audioContext.createGain();const now=audioContext.currentTime;const notes={start:[390,585],jump:[260,520],shoot:[640,210],star:[880,1320],enemy:[200,65],hurt:[140,65],win:[520,1040],heart:[700,950],checkpoint:[550,830]};const f=notes[type]||[440,660];o.type=type==='shoot'?'triangle':'sine';o.frequency.setValueAtTime(f[0],now);o.frequency.exponentialRampToValueAtTime(f[1],now+.13);g.gain.setValueAtTime(.06,now);g.gain.exponentialRampToValueAtTime(.001,now+.2);o.connect(g);g.connect(audioContext.destination);o.start();o.stop(now+.22);}catch{}}
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');toastUntil=performance.now()+2400;}
 function sync(){
  $('score').textContent=String(game.score).padStart(2,'0');$('star-total').textContent=`/ ${game.level.stars.length}`;
@@ -290,17 +291,17 @@ function sync(){
  if(states[game.status]){const [eyebrow,title,copy,button,hint]=states[game.status];$('overlay-eyebrow').textContent=eyebrow;$('overlay-title').innerHTML=title;$('overlay-copy').textContent=copy;$('play-button').innerHTML=`${button} <span>→</span>`;$('overlay-hint').textContent=hint;}
  $('scene-label').textContent=game.status==='playing'?'MAKE A LITTLE MAGIC':game.status==='ready'?'A NEW ADVENTURE AWAITS':game.status==='won'?'LOOK AT YOU GO, LITTLE HERO':'YOUR ADVENTURE, YOUR PACE';
 }
-function clearInput(){Object.keys(input).forEach(k=>input[k]=false);}
-function primary(){clearInput();if(game.status==='won')game.next();else if(game.status==='lost')game.restart();else game.start();previousStatus='';sync();canvas.focus({preventScroll:true});}
-function pause(){if(game.status==='playing'){game.status='paused';clearInput();}else if(game.status==='paused')game.start();sync();}
+function clearInput(){Object.keys(input).forEach(k=>input[k]=false);document.querySelectorAll('.touch-controls .pressed').forEach(button=>button.classList.remove('pressed'));}
+function primary(){const newChapter=game.status!=='paused';unlockAudio();clearInput();if(game.status==='won')game.next();else if(game.status==='lost')game.restart();else game.start();previousStatus='';sync();if(newChapter)tone('start');canvas.focus({preventScroll:true});if(window.matchMedia('(max-width:620px)').matches)document.querySelector('.game-shell').scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});}
+function pause(){if(game.status==='playing'){game.status='paused';clearInput();}else if(game.status==='paused'){unlockAudio();game.start();}sync();}
 const keys={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',Space:'jump',ArrowUp:'jump',KeyW:'jump',KeyX:'shoot',KeyJ:'shoot'};
-window.addEventListener('keydown',e=>{if($('help-dialog').open)return;if(keys[e.code]){e.preventDefault();input[keys[e.code]]=true;}if(e.repeat)return;if(e.code==='Enter'&&e.target.tagName!=='BUTTON'&&game.status!=='playing'){e.preventDefault();primary();}if(e.code==='KeyP'||e.code==='Escape')pause();if(e.code==='KeyR'&&game.status!=='ready'){game.restart();previousStatus='';sync();}});
+window.addEventListener('keydown',e=>{if($('help-dialog').open)return;if(keys[e.code]){e.preventDefault();unlockAudio();input[keys[e.code]]=true;}if(e.repeat)return;if(e.code==='Enter'&&e.target.tagName!=='BUTTON'&&game.status!=='playing'){e.preventDefault();primary();}if(e.code==='KeyP'||e.code==='Escape')pause();if(e.code==='KeyR'&&game.status!=='ready'){game.restart();previousStatus='';sync();}});
 window.addEventListener('keyup',e=>{if(keys[e.code]){e.preventDefault();input[keys[e.code]]=false;}});
 window.addEventListener('blur',()=>{clearInput();if(game.status==='playing'){game.status='paused';sync();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.status==='playing'){clearInput();game.status='paused';sync();}});
-for(const button of document.querySelectorAll('[data-control]')){button.addEventListener('pointerdown',e=>{e.preventDefault();button.setPointerCapture(e.pointerId);input[button.dataset.control]=true;});for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,()=>input[button.dataset.control]=false);}
+for(const button of document.querySelectorAll('[data-control]')){button.addEventListener('pointerdown',e=>{e.preventDefault();unlockAudio();button.setPointerCapture(e.pointerId);button.classList.add('pressed');input[button.dataset.control]=true;});for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,()=>{input[button.dataset.control]=false;button.classList.remove('pressed');});}
 $('play-button').addEventListener('click',primary);$('pause-button').addEventListener('click',pause);$('restart-button').addEventListener('click',()=>{clearInput();game.restart();previousStatus='';sync();canvas.focus({preventScroll:true});});
-$('sound-button').addEventListener('click',()=>{sound=!sound;$('sound-button').innerHTML=`<span id="sound-icon">♪</span> Sound ${sound?'on':'off'}`;$('sound-button').setAttribute('aria-pressed',String(sound));if(sound)tone('star');});
+$('sound-button').addEventListener('click',()=>{sound=!sound;$('sound-button').innerHTML=`<span id="sound-icon">♪</span> Sound ${sound?'on':'off'}`;$('sound-button').setAttribute('aria-pressed',String(sound));if(sound){unlockAudio();tone('star');}});
 $('how-button').addEventListener('click',()=>{helpWasPlaying=game.status==='playing';if(helpWasPlaying)pause();$('help-dialog').showModal();});
 function closeHelp(){$('help-dialog').close();}
 $('close-help').addEventListener('click',closeHelp);$('got-it').addEventListener('click',closeHelp);$('help-dialog').addEventListener('close',()=>{clearInput();if(helpWasPlaying){game.start();sync();}canvas.focus({preventScroll:true});});
