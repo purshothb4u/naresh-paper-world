@@ -1,8 +1,10 @@
 import { Game, WORLDS } from './engine.js';
+import { createMusicPlayer } from './music.js';
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d');
 const game=new Game(),input={};
 let viewWidth=1200,viewHeight=480,last=0,visualTime=0,sound=true,audioContext,toastUntil=0,previousStatus='',helpWasPlaying=false;
+const music=createMusicPlayer(()=>audioContext);
 const ink='#52604b';
 const nareshSprite=new Image();
 nareshSprite.src=new URL('./assets/naresh-cartoon.png',import.meta.url).href;
@@ -277,6 +279,7 @@ function draw(){
 function resize(){const rect=canvas.getBoundingClientRect();viewWidth=480*rect.width/rect.height;viewHeight=480;const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.round(rect.width*dpr);canvas.height=Math.round(rect.height*dpr);ctx.setTransform(canvas.width/viewWidth,0,0,canvas.height/480,0,0);}
 function unlockAudio(){if(!sound)return;try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;audioContext??=new Audio();if(audioContext.state==='suspended')audioContext.resume().catch(()=>{});}catch{}}
 function tone(type){if(!sound)return;try{unlockAudio();if(!audioContext)return;const o=audioContext.createOscillator(),g=audioContext.createGain();const now=audioContext.currentTime;const notes={start:[390,585],jump:[260,520],shoot:[640,210],star:[880,1320],enemy:[200,65],hurt:[140,65],win:[520,1040],heart:[700,950],checkpoint:[550,830]};const f=notes[type]||[440,660];o.type=type==='shoot'?'triangle':'sine';o.frequency.setValueAtTime(f[0],now);o.frequency.exponentialRampToValueAtTime(f[1],now+.13);g.gain.setValueAtTime(.06,now);g.gain.exponentialRampToValueAtTime(.001,now+.2);o.connect(g);g.connect(audioContext.destination);o.start();o.stop(now+.22);}catch{}}
+function syncMusic(){if(sound&&game.status==='playing'&&!document.hidden){unlockAudio();music.start();}else music.stop();}
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');toastUntil=performance.now()+2400;}
 function sync(){
  $('score').textContent=String(game.score).padStart(2,'0');$('star-total').textContent=`/ ${game.level.stars.length}`;
@@ -284,7 +287,7 @@ function sync(){
  $('progress-fill').style.width=`${Math.max(0,Math.min(100,game.player.x/game.level.finish*100))}%`;
  $('pause-button').disabled=game.status==='ready'||game.status==='won'||game.status==='lost';
  $('pause-button').textContent=game.status==='paused'?'▷':'Ⅱ';$('pause-button').setAttribute('aria-label',game.status==='paused'?'Resume game':'Pause game');
- if(previousStatus===game.status)return;previousStatus=game.status;
+ if(previousStatus===game.status)return;previousStatus=game.status;syncMusic();
  $('level-label').textContent=`LEVEL 0${game.index+1} · ${WORLDS[game.index].year}`;$('world-title').textContent=WORLDS[game.index].name;$('level-badge').innerHTML=`${WORLDS[game.index].year} <span>· 0${game.index+1}/03</span>`;
  $('overlay').classList.toggle('hidden',game.status==='playing');
  const states={ready:[`LEVEL 0${game.index+1} · ${WORLDS[game.index].name.toUpperCase()} · ${WORLDS[game.index].year}`,'A little courage.<br>A little <em>pew pew.</em>',`Reach the ${WORLDS[game.index].year} flag to finish this chapter.`,'Let’s play','PRESS ENTER TO START'],paused:['TAKE A LITTLE BREATHER','A pause in<br>the <em>adventure.</em>','Your paper world will be right here.','Keep going','PRESS P OR ENTER TO RESUME'],lost:['EVERY HERO GETS ANOTHER CHANCE','One more<br><em>little adventure?</em>',`You found ${game.score} stars. Let’s give it another go.`,'Try again','PRESS ENTER TO RESTART'],won:[`${WORLDS[game.index].name.toUpperCase()} · ${WORLDS[game.index].year} COMPLETE`,game.index===2?'A small hero.<br>A <em>big victory.</em>':'A new page.<br>A <em>new adventure.</em>',game.index===2?`All three cities complete! ${game.totalScore+game.score} / 108 stars collected.`:`${game.score} / 36 stars collected. Next stop: ${WORLDS[game.index+1].name}, ${WORLDS[game.index+1].year}.`,game.index===2?'Play again':'Next city','PRESS ENTER TO CONTINUE']};
@@ -295,13 +298,13 @@ function clearInput(){Object.keys(input).forEach(k=>input[k]=false);document.que
 function primary(){const newChapter=game.status!=='paused';unlockAudio();clearInput();if(game.status==='won')game.next();else if(game.status==='lost')game.restart();else game.start();previousStatus='';sync();if(newChapter)tone('start');canvas.focus({preventScroll:true});if(window.matchMedia('(max-width:620px)').matches)document.querySelector('.game-shell').scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});}
 function pause(){if(game.status==='playing'){game.status='paused';clearInput();}else if(game.status==='paused'){unlockAudio();game.start();}sync();}
 const keys={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',Space:'jump',ArrowUp:'jump',KeyW:'jump',KeyX:'shoot',KeyJ:'shoot'};
-window.addEventListener('keydown',e=>{if($('help-dialog').open)return;if(keys[e.code]){e.preventDefault();unlockAudio();input[keys[e.code]]=true;}if(e.repeat)return;if(e.code==='Enter'&&e.target.tagName!=='BUTTON'&&game.status!=='playing'){e.preventDefault();primary();}if(e.code==='KeyP'||e.code==='Escape')pause();if(e.code==='KeyR'&&game.status!=='ready'){game.restart();previousStatus='';sync();}});
+window.addEventListener('keydown',e=>{if($('help-dialog').open)return;if(keys[e.code]){e.preventDefault();unlockAudio();input[keys[e.code]]=true;}if(e.repeat)return;if(e.code==='Enter'&&e.target.tagName!=='BUTTON'&&game.status!=='playing'){e.preventDefault();primary();}if(e.code==='KeyP'||e.code==='Escape')pause();if(e.code==='KeyR'&&game.status!=='ready'){unlockAudio();game.restart();previousStatus='';sync();}});
 window.addEventListener('keyup',e=>{if(keys[e.code]){e.preventDefault();input[keys[e.code]]=false;}});
 window.addEventListener('blur',()=>{clearInput();if(game.status==='playing'){game.status='paused';sync();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&game.status==='playing'){clearInput();game.status='paused';sync();}});
 for(const button of document.querySelectorAll('[data-control]')){button.addEventListener('pointerdown',e=>{e.preventDefault();unlockAudio();button.setPointerCapture(e.pointerId);button.classList.add('pressed');input[button.dataset.control]=true;});for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,()=>{input[button.dataset.control]=false;button.classList.remove('pressed');});}
-$('play-button').addEventListener('click',primary);$('pause-button').addEventListener('click',pause);$('restart-button').addEventListener('click',()=>{clearInput();game.restart();previousStatus='';sync();canvas.focus({preventScroll:true});});
-$('sound-button').addEventListener('click',()=>{sound=!sound;$('sound-button').innerHTML=`<span id="sound-icon">♪</span> Sound ${sound?'on':'off'}`;$('sound-button').setAttribute('aria-pressed',String(sound));if(sound){unlockAudio();tone('star');}});
+$('play-button').addEventListener('click',primary);$('pause-button').addEventListener('click',pause);$('restart-button').addEventListener('click',()=>{unlockAudio();clearInput();game.restart();previousStatus='';sync();canvas.focus({preventScroll:true});});
+$('sound-button').addEventListener('click',()=>{sound=!sound;$('sound-button').innerHTML=`<span id="sound-icon">♪</span> Sound ${sound?'on':'off'}`;$('sound-button').setAttribute('aria-pressed',String(sound));if(sound){unlockAudio();tone('star');}syncMusic();});
 $('how-button').addEventListener('click',()=>{helpWasPlaying=game.status==='playing';if(helpWasPlaying)pause();$('help-dialog').showModal();});
 function closeHelp(){$('help-dialog').close();}
 $('close-help').addEventListener('click',closeHelp);$('got-it').addEventListener('click',closeHelp);$('help-dialog').addEventListener('close',()=>{clearInput();if(helpWasPlaying){game.start();sync();}canvas.focus({preventScroll:true});});
